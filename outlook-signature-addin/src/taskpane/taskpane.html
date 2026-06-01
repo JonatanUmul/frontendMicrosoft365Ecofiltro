@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Firmas Automaticas 365</title>
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  <script src="../shared/signature-service.js"></script>
+  <script src="./taskpane.js" defer></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 18px;
+      font-family: Arial, Helvetica, sans-serif;
+      color: #172033;
+      background: #f5f7fb;
+    }
+
+    main {
+      display: grid;
+      gap: 14px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 20px;
+    }
+
+    p {
+      margin: 0;
+      color: #5b6678;
+      line-height: 1.45;
+    }
+
+    button {
+      border: 0;
+      border-radius: 8px;
+      background: #1666c1;
+      color: #fff;
+      padding: 11px 14px;
+      cursor: pointer;
+      font-weight: 700;
+    }
+
+    .status {
+      border: 1px solid #cbd8e8;
+      border-radius: 8px;
+      background: #fff;
+      padding: 12px;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Firmas Automaticas 365</h1>
+    <p>La firma se inserta automaticamente al crear un correo. Tambien puedes reinsertarla manualmente desde aqui.</p>
+    <button id="insertSignature">Insertar firma ahora</button>
+    <div class="status" id="status">Esperando Outlook...</div>
+  </main>
+</body>
+</html>
