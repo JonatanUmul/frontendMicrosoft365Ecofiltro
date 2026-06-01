@@ -80,7 +80,7 @@ button { cursor: pointer; }
 
 .app {
   display: grid;
-  grid-template-columns: 320px minmax(0, 1fr);
+  grid-template-columns: 340px minmax(0, 1fr);
   min-height: 100vh;
 }
 
@@ -247,6 +247,11 @@ button { cursor: pointer; }
   border-radius: 8px;
   padding: 11px;
   background: rgba(255,255,255,.06);
+  min-width: 0;
+}
+
+.sidebar-form * {
+  min-width: 0;
 }
 
 .sidebar-form h4 {
@@ -269,6 +274,10 @@ button { cursor: pointer; }
 
 .sidebar-form input[type="date"] {
   color-scheme: dark;
+}
+
+.sidebar-form .two {
+  grid-template-columns: 1fr;
 }
 
 .sidebar-form-actions {
@@ -422,6 +431,11 @@ button { cursor: pointer; }
   color: #fff;
   border-color: var(--brand);
   background: var(--brand);
+}
+
+.button:disabled {
+  cursor: wait;
+  opacity: .68;
 }
 
 .button.danger-outline {
@@ -846,6 +860,8 @@ textarea {
   padding: 22px;
   background: #fff;
   color: #2a3344;
+  max-width: 100%;
+  overflow: auto;
 }
 
 .html-preview {
@@ -854,6 +870,13 @@ textarea {
   padding: 20px;
   min-height: 280px;
   background: #fff;
+  max-width: 100%;
+  overflow: auto;
+}
+
+.html-preview table,
+.email table {
+  max-width: 100%;
 }
 
 @media (max-width: 1120px) {

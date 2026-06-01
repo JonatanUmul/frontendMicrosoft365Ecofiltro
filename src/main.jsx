@@ -75,6 +75,7 @@ function App() {
   const [previewHtml, setPreviewHtml] = useState("");
   const [status, setStatus] = useState("Cargando...");
   const [diagnostics, setDiagnostics] = useState([]);
+  const [saving, setSaving] = useState(false);
 
   function addDiagnostic(type, message, detail = "") {
     const entry = {
@@ -254,38 +255,47 @@ function App() {
   }
 
   async function saveSignature() {
+    if (saving) return;
+    setSaving(true);
     setStatus("Guardando firma...");
-    const method = signatureDraft.id ? "PUT" : "POST";
-    const url = signatureDraft.id ? `${API}/api/signatures/${signatureDraft.id}` : `${API}/api/signatures`;
-    const payload = {
-      ...signatureDraft,
-      season_id: selectedSeasonId,
-      html: signatureDraft.mode === "html" ? String(signatureDraft.html || "") : signatureDraft.html
-    };
-    const response = await fetch(url, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-    if (!response.ok) {
-      const text = await response.text();
-      addDiagnostic("error", "No se pudo guardar firma", text);
-      throw new Error("No se pudo guardar");
+    try {
+      const method = signatureDraft.id ? "PUT" : "POST";
+      const url = signatureDraft.id ? `${API}/api/signatures/${signatureDraft.id}` : `${API}/api/signatures`;
+      const payload = {
+        ...signatureDraft,
+        season_id: selectedSeasonId,
+        is_default: true,
+        html: signatureDraft.mode === "html" ? String(signatureDraft.html || "") : signatureDraft.html
+      };
+      const response = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        addDiagnostic("error", "No se pudo guardar firma", text);
+        setStatus("No se pudo guardar la firma");
+        return;
+      }
+      const saved = await response.json();
+      if (saved.signature) {
+        setSignatureDraft(structuredClone(saved.signature));
+        setSelectedSignatureId(saved.signature.id || null);
+        setData((current) => ({
+          ...current,
+          signatures: [
+            saved.signature,
+            ...current.signatures.filter((signature) => signature.id !== saved.signature.id)
+          ]
+        }));
+        await load({ seasonId: selectedSeasonId, userId: selectedUserId, signatureId: saved.signature.id });
+      }
+      addDiagnostic("ok", "Firma guardada", `${saved.signature?.name || signatureDraft.name} (${saved.signature?.mode || signatureDraft.mode})`);
+      setStatus("Firma guardada y publicada para la temporada activa");
+    } finally {
+      setSaving(false);
     }
-    const saved = await response.json();
-    if (saved.signature) {
-      setSignatureDraft(structuredClone(saved.signature));
-      setSelectedSignatureId(saved.signature.id || null);
-      setData((current) => ({
-        ...current,
-        signatures: [
-          saved.signature,
-          ...current.signatures.filter((signature) => signature.id !== saved.signature.id)
-        ]
-      }));
-    }
-    addDiagnostic("ok", "Firma guardada", `${saved.signature?.name || signatureDraft.name} (${saved.signature?.mode || signatureDraft.mode})`);
-    setStatus("Firma guardada en MySQL");
   }
 
   async function saveAsNewSignature() {
@@ -350,13 +360,14 @@ function App() {
   async function addSeason() {
     const name = prompt("Nombre de la temporada");
     if (!name) return;
-    await fetch(`${API}/api/seasons`, {
+    const response = await fetch(`${API}/api/seasons`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, is_active: false })
+      body: JSON.stringify({ name, is_active: true })
     });
+    const payload = await response.json();
     addDiagnostic("ok", "Temporada creada", name);
-    await load({ userId: selectedUserId });
+    await load({ seasonId: payload.id, userId: selectedUserId, signatureId: null });
   }
 
   async function saveSeason(patch) {
@@ -626,7 +637,7 @@ function App() {
             }}>Nueva firma</button>
             <button className="button" onClick={saveAsNewSignature}><Copy size={17} /> Guardar como nueva</button>
             <button className="button danger-outline" onClick={deleteCurrentSignature}><Trash2 size={17} /> Eliminar firma</button>
-            <button className="button primary" onClick={saveSignature}><Save size={17} /> Guardar</button>
+            <button className="button primary" onClick={saveSignature} disabled={saving}><Save size={17} /> {saving ? "Guardando..." : "Guardar"}</button>
           </div>
         </header>
 
@@ -769,7 +780,7 @@ function App() {
               <div className="email">
                 <p>Hola,</p>
                 <p>Adjunto lo solicitado.</p>
-              <div dangerouslySetInnerHTML={{ __html: renderLocal(signatureDraft, selectedUser) || previewHtml }} />
+              <div dangerouslySetInnerHTML={{ __html: renderLocal(signatureDraft, selectedUser) }} />
               </div>
             </section>
           </div>

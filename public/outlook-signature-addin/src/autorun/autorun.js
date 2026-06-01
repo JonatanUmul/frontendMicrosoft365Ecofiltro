@@ -12,24 +12,14 @@ function completeEvent(event) {
 
 function setSignature(html, event) {
   const item = Office.context.mailbox.item;
-  const options = { coercionType: Office.CoercionType.Html };
   const email = Office.context.mailbox.userProfile?.emailAddress || "";
 
-  if (item.body && typeof item.body.setSignatureAsync === "function") {
-    item.body.setSignatureAsync(html, options, function (result) {
-      window.SignatureService.logEvent("signature_inserted", email, {
-        method: "setSignatureAsync",
-        status: result.status
-      });
-      completeEvent(event);
-    });
-    return;
-  }
-
-  item.body.setSelectedDataAsync(html, options, function (result) {
+  window.SignatureService.setManagedSignature(item, html, function (result) {
     window.SignatureService.logEvent("signature_inserted", email, {
-      method: "setSelectedDataAsync",
-      status: result.status
+      method: result.method,
+      status: result.status,
+      error: result.error?.message || "",
+      fallback_reason: result.fallback_reason || ""
     });
     completeEvent(event);
   });

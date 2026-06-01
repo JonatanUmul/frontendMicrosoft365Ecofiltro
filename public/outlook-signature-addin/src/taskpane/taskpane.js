@@ -9,21 +9,26 @@ Office.onReady(function () {
 
 async function insertSignature() {
   const status = document.getElementById("status");
+  const button = document.getElementById("insertSignature");
   const item = Office.context.mailbox.item;
   const profile = Office.context.mailbox.userProfile || {};
   const email = profile.emailAddress || "";
-  const html = await window.SignatureService.getSignatureForEmail(email);
 
+  button.disabled = true;
   status.textContent = "Insertando firma...";
   await window.SignatureService.logEvent("manual_insert_clicked", email);
+  const html = await window.SignatureService.getSignatureForEmail(email);
 
-  item.body.setSignatureAsync(html, { coercionType: Office.CoercionType.Html }, function (result) {
+  window.SignatureService.setManagedSignature(item, html, function (result) {
     window.SignatureService.logEvent("manual_insert_result", email, {
+      method: result.method,
       status: result.status,
-      error: result.error?.message || ""
+      error: result.error?.message || "",
+      fallback_reason: result.fallback_reason || ""
     });
     status.textContent = result.status === Office.AsyncResultStatus.Succeeded
-      ? "Firma insertada correctamente."
+      ? "Firma actualizada correctamente."
       : "No se pudo insertar la firma. Revisa permisos o compatibilidad del cliente Outlook.";
+    button.disabled = false;
   });
 }
