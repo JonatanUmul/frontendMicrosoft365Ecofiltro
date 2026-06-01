@@ -1,5 +1,5 @@
 (function () {
-  const SIGNATURE_API_BASE = window.SIGNATURE_API_BASE || "http://localhost:5174";
+  const SIGNATURE_API_BASE = window.SIGNATURE_API_BASE || "https://backendmicrosoft365ecofiltro.onrender.com";
 
   const demoUsers = {
     "ana.morales@empresa.com": {
