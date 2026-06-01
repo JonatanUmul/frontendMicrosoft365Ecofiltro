@@ -87,9 +87,10 @@ function App() {
     setDiagnostics((current) => [entry, ...current].slice(0, 30));
   }
 
-  function pickSignatureForSeason(seasonId, payload = data) {
+  function pickSignatureForSeason(seasonId, payload = data, signatureId = null) {
     const season = payload.seasons.find((item) => item.id === seasonId);
-    const signature = payload.signatures.find((item) => item.season_id === seasonId);
+    const seasonSignatures = payload.signatures.filter((item) => item.season_id === seasonId);
+    const signature = seasonSignatures.find((item) => item.id === signatureId) || seasonSignatures[0];
     return signature || emptySignature(seasonId, season?.name, payload.assets[0]?.public_url);
   }
 
@@ -105,13 +106,26 @@ function App() {
     addDiagnostic("ok", "Datos cargados", `${payload.users.length} usuarios, ${payload.seasons.length} temporadas`);
     setData(payload);
     const activeSeason = payload.seasons.find((season) => season.is_active) || payload.seasons[0];
-    const seasonId = options.seasonId || selectedSeasonId || activeSeason?.id || null;
-    const signature = pickSignatureForSeason(seasonId, payload);
+    const hasSeasonOption = Object.prototype.hasOwnProperty.call(options, "seasonId");
+    const requestedSeasonId = hasSeasonOption ? options.seasonId : selectedSeasonId;
+    let seasonId = requestedSeasonId ?? activeSeason?.id ?? payload.seasons[0]?.id ?? null;
+    if (seasonId && !payload.seasons.some((season) => season.id === seasonId)) {
+      seasonId = activeSeason?.id || payload.seasons[0]?.id || null;
+    }
+    const hasSignatureOption = Object.prototype.hasOwnProperty.call(options, "signatureId");
+    const requestedSignatureId = hasSignatureOption ? options.signatureId : selectedSignatureId;
+    const signature = pickSignatureForSeason(seasonId, payload, requestedSignatureId);
+    const hasUserOption = Object.prototype.hasOwnProperty.call(options, "userId");
+    const requestedUserId = hasUserOption ? options.userId : selectedUserId;
+    let userId = requestedUserId ?? payload.users[0]?.id ?? null;
+    if (userId && !payload.users.some((user) => user.id === userId)) {
+      userId = payload.users[0]?.id || null;
+    }
     setSelectedSeasonId(seasonId);
     setSelectedSignatureId(signature.id || null);
     setSignatureDraft(structuredClone(signature));
     setSelectedElementId(signature.config?.elements?.[0]?.id || null);
-    setSelectedUserId(options.userId || selectedUserId || payload.users[0]?.id || null);
+    setSelectedUserId(userId);
     setStatus("Listo");
   }
 
@@ -127,6 +141,16 @@ function App() {
     [data.users, selectedUserId]
   );
 
+  const selectedSeason = useMemo(
+    () => data.seasons.find((season) => season.id === selectedSeasonId) || data.seasons[0] || {},
+    [data.seasons, selectedSeasonId]
+  );
+
+  const currentSeasonSignatures = useMemo(
+    () => data.signatures.filter((signature) => signature.season_id === selectedSeasonId),
+    [data.signatures, selectedSeasonId]
+  );
+
   const selectedElement = useMemo(
     () => signatureDraft?.config?.elements?.find((element) => element.id === selectedElementId) || null,
     [signatureDraft, selectedElementId]
@@ -134,11 +158,12 @@ function App() {
 
   useEffect(() => {
     if (!selectedSeasonId || data.seasons.length === 0) return;
-    const signature = pickSignatureForSeason(selectedSeasonId, data);
+    const currentSignatureStillValid = data.signatures.some((signature) => signature.id === selectedSignatureId && signature.season_id === selectedSeasonId);
+    const signature = pickSignatureForSeason(selectedSeasonId, data, currentSignatureStillValid ? selectedSignatureId : null);
     setSelectedSignatureId(signature.id || null);
     setSignatureDraft(structuredClone(signature));
     setSelectedElementId(signature.config?.elements?.[0]?.id || null);
-  }, [selectedSeasonId, data.seasons.length, data.signatures.length, data.assets.length]);
+  }, [selectedSeasonId, selectedSignatureId, data.seasons.length, data.signatures.length, data.assets.length]);
 
   useEffect(() => {
     async function refreshPreview() {
@@ -234,6 +259,7 @@ function App() {
     const url = signatureDraft.id ? `${API}/api/signatures/${signatureDraft.id}` : `${API}/api/signatures`;
     const payload = {
       ...signatureDraft,
+      season_id: selectedSeasonId,
       html: signatureDraft.mode === "html" ? String(signatureDraft.html || "") : signatureDraft.html
     };
     const response = await fetch(url, {
@@ -260,6 +286,38 @@ function App() {
     }
     addDiagnostic("ok", "Firma guardada", `${saved.signature?.name || signatureDraft.name} (${saved.signature?.mode || signatureDraft.mode})`);
     setStatus("Firma guardada en MySQL");
+  }
+
+  async function saveAsNewSignature() {
+    const copy = {
+      ...signatureDraft,
+      id: null,
+      season_id: selectedSeasonId,
+      name: `${signatureDraft.name || "Firma"} copia`
+    };
+    setSignatureDraft(copy);
+    setSelectedSignatureId(null);
+    setStatus("Lista como nueva firma. Presiona Guardar.");
+    addDiagnostic("info", "Firma preparada como nueva", copy.name);
+  }
+
+  async function deleteCurrentSignature() {
+    if (!signatureDraft.id) {
+      const next = emptySignature(selectedSeasonId, selectedSeason.name, data.assets[0]?.public_url);
+      setSignatureDraft(next);
+      setSelectedSignatureId(null);
+      setSelectedElementId(next.config.elements[0]?.id || null);
+      return;
+    }
+
+    if (!confirm(`Eliminar la firma "${signatureDraft.name}"?`)) return;
+    const response = await fetch(`${API}/api/signatures/${signatureDraft.id}`, { method: "DELETE" });
+    if (!response.ok) {
+      addDiagnostic("error", "No se pudo eliminar firma", await response.text());
+      return;
+    }
+    addDiagnostic("ok", "Firma eliminada", signatureDraft.name);
+    await load({ seasonId: selectedSeasonId, userId: selectedUserId });
   }
 
   async function uploadAsset(file, options = { addToCanvas: true }) {
@@ -301,6 +359,34 @@ function App() {
     await load({ userId: selectedUserId });
   }
 
+  async function saveSeason(patch) {
+    if (!selectedSeasonId) return;
+    const payload = { ...selectedSeason, ...patch };
+    const response = await fetch(`${API}/api/seasons/${selectedSeasonId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    if (!response.ok) {
+      addDiagnostic("error", "No se pudo actualizar temporada", await response.text());
+      return;
+    }
+    addDiagnostic("ok", "Temporada actualizada", payload.name);
+    await load({ seasonId: selectedSeasonId, userId: selectedUserId });
+  }
+
+  async function deleteSeason() {
+    if (!selectedSeasonId) return;
+    if (!confirm(`Eliminar la temporada "${selectedSeason.name}" y sus firmas?`)) return;
+    const response = await fetch(`${API}/api/seasons/${selectedSeasonId}`, { method: "DELETE" });
+    if (!response.ok) {
+      addDiagnostic("error", "No se pudo eliminar temporada", await response.text());
+      return;
+    }
+    addDiagnostic("ok", "Temporada eliminada", selectedSeason.name);
+    await load({ userId: selectedUserId, seasonId: null });
+  }
+
   async function activateSeason() {
     if (!selectedSeasonId) return;
     await fetch(`${API}/api/seasons/${selectedSeasonId}/activate`, { method: "POST" });
@@ -319,6 +405,78 @@ function App() {
     });
     addDiagnostic("ok", "Usuario guardado", email);
     await load({ seasonId: selectedSeasonId });
+  }
+
+  async function importUsersCsv(file) {
+    if (!file) return;
+    setStatus("Importando usuarios...");
+    try {
+      const text = await file.text();
+      const users = parseUsersCsv(text);
+      if (!users.length) {
+        addDiagnostic("error", "CSV sin usuarios", "Revisa que tenga encabezados y correos.");
+        setStatus("No se encontraron usuarios en el CSV");
+        return;
+      }
+      const response = await fetch(`${API}/api/users/import`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ users })
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        addDiagnostic("error", "No se pudo importar usuarios", payload);
+        setStatus("Error importando usuarios");
+        return;
+      }
+      addDiagnostic("ok", "Usuarios importados", `${payload.imported} guardados, ${payload.skipped} omitidos`);
+      setStatus(`${payload.imported} usuarios importados o actualizados`);
+      await load({ seasonId: selectedSeasonId, userId: selectedUserId });
+    } catch (error) {
+      addDiagnostic("error", "Error leyendo CSV", error.message);
+      setStatus("Error leyendo CSV");
+    }
+  }
+
+  function downloadUserTemplate() {
+    const csv = [
+      "name,email,title,department,phone,mobile,location,active",
+      "Ana Morales,ana.morales@empresa.com,Gerente Comercial,Ventas,+502 2300 1001,+502 5555 0001,Guatemala,1"
+    ].join("\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "plantilla-usuarios-firmas365.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function saveUser(patch) {
+    if (!selectedUserId) return;
+    const payload = { ...selectedUser, ...patch };
+    const response = await fetch(`${API}/api/users/${selectedUserId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    if (!response.ok) {
+      addDiagnostic("error", "No se pudo actualizar usuario", await response.text());
+      return;
+    }
+    addDiagnostic("ok", "Usuario actualizado", payload.email);
+    await load({ seasonId: selectedSeasonId, userId: selectedUserId });
+  }
+
+  async function deleteUser() {
+    if (!selectedUserId) return;
+    if (!confirm(`Eliminar el usuario "${selectedUser.email}"?`)) return;
+    const response = await fetch(`${API}/api/users/${selectedUserId}`, { method: "DELETE" });
+    if (!response.ok) {
+      addDiagnostic("error", "No se pudo eliminar usuario", await response.text());
+      return;
+    }
+    addDiagnostic("ok", "Usuario eliminado", selectedUser.email);
+    await load({ seasonId: selectedSeasonId, userId: null });
   }
 
   if (!signatureDraft) {
@@ -377,12 +535,31 @@ function App() {
             ))}
           </div>
           <button className="wide-button" onClick={activateSeason}>Activar temporada</button>
+          <SeasonEditor
+            season={selectedSeason}
+            onSave={saveSeason}
+            onDelete={deleteSeason}
+          />
         </section>
 
         <section>
           <div className="section-title">
             <span>Usuarios</span>
             <button onClick={addUser} title="Agregar usuario"><Plus size={16} /></button>
+          </div>
+          <div className="import-actions">
+            <label className="import-button">
+              <Upload size={14} /> Subir CSV
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                onChange={(event) => {
+                  importUsersCsv(event.target.files[0]);
+                  event.target.value = "";
+                }}
+              />
+            </label>
+            <button onClick={downloadUserTemplate}>Plantilla</button>
           </div>
           <div className="list users">
             {data.users.map((user) => (
@@ -396,6 +573,11 @@ function App() {
               </button>
             ))}
           </div>
+          <UserEditor
+            user={selectedUser}
+            onSave={saveUser}
+            onDelete={deleteUser}
+          />
         </section>
 
         <section>
@@ -442,6 +624,8 @@ function App() {
               setSelectedSignatureId(null);
               setSelectedElementId(next.config.elements[0]?.id || null);
             }}>Nueva firma</button>
+            <button className="button" onClick={saveAsNewSignature}><Copy size={17} /> Guardar como nueva</button>
+            <button className="button danger-outline" onClick={deleteCurrentSignature}><Trash2 size={17} /> Eliminar firma</button>
             <button className="button primary" onClick={saveSignature}><Save size={17} /> Guardar</button>
           </div>
         </header>
@@ -470,6 +654,17 @@ function App() {
             <h3>Firma</h3>
             <label>Nombre</label>
             <input value={signatureDraft.name} onChange={(event) => updateDraft({ name: event.target.value })} />
+
+            <label>Firmas de esta temporada</label>
+            <select
+              value={selectedSignatureId || ""}
+              onChange={(event) => setSelectedSignatureId(event.target.value ? Number(event.target.value) : null)}
+            >
+              {currentSeasonSignatures.length === 0 && <option value="">Firma nueva sin guardar</option>}
+              {currentSeasonSignatures.map((signature) => (
+                <option key={signature.id} value={signature.id}>{signature.name}</option>
+              ))}
+            </select>
 
             <label>Modo</label>
             <div className="segmented">
@@ -584,6 +779,102 @@ function App() {
   );
 }
 
+function parseUsersCsv(text) {
+  const rows = parseCsvRows(text).filter((row) => row.some((cell) => String(cell || "").trim()));
+  if (rows.length < 2) return [];
+  const headers = rows[0].map(normalizeHeader);
+  return rows.slice(1).map((row) => {
+    const item = {};
+    row.forEach((value, index) => {
+      const key = headers[index];
+      if (key) item[key] = String(value || "").trim();
+    });
+    return item;
+  }).filter((user) => user.email);
+}
+
+function parseCsvRows(text) {
+  const delimiter = detectDelimiter(text);
+  const rows = [];
+  let row = [];
+  let cell = "";
+  let quoted = false;
+
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    const next = text[index + 1];
+    if (char === '"') {
+      if (quoted && next === '"') {
+        cell += '"';
+        index += 1;
+      } else {
+        quoted = !quoted;
+      }
+      continue;
+    }
+    if (char === delimiter && !quoted) {
+      row.push(cell);
+      cell = "";
+      continue;
+    }
+    if ((char === "\n" || char === "\r") && !quoted) {
+      if (char === "\r" && next === "\n") index += 1;
+      row.push(cell);
+      rows.push(row);
+      row = [];
+      cell = "";
+      continue;
+    }
+    cell += char;
+  }
+
+  row.push(cell);
+  rows.push(row);
+  return rows;
+}
+
+function detectDelimiter(text) {
+  const firstLine = String(text || "").split(/\r?\n/)[0] || "";
+  const commas = (firstLine.match(/,/g) || []).length;
+  const semicolons = (firstLine.match(/;/g) || []).length;
+  return semicolons > commas ? ";" : ",";
+}
+
+function normalizeHeader(header) {
+  const value = String(header || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/(^_|_$)/g, "");
+  const aliases = {
+    nombre: "name",
+    name: "name",
+    correo: "email",
+    email: "email",
+    mail: "email",
+    correo_electronico: "email",
+    puesto: "title",
+    cargo: "title",
+    title: "title",
+    departamento: "department",
+    department: "department",
+    telefono: "phone",
+    phone: "phone",
+    celular: "mobile",
+    movil: "mobile",
+    mobile: "mobile",
+    ubicacion: "location",
+    direccion: "location",
+    location: "location",
+    activo: "active",
+    active: "active",
+    estado: "active"
+  };
+  return aliases[value] || "";
+}
+
 function ElementControls({ element, onChange, onDelete, onDuplicate, onLayerUp, onLayerDown, assets }) {
   if (!element) return <p className="muted">Selecciona o agrega un bloque para editarlo.</p>;
 
@@ -678,6 +969,91 @@ function NumberField({ label, value, onChange }) {
       <input type="number" value={value} onChange={(event) => onChange(Number(event.target.value))} />
     </div>
   );
+}
+
+function SeasonEditor({ season, onSave, onDelete }) {
+  const [draft, setDraft] = useState(season || {});
+
+  useEffect(() => {
+    setDraft(season || {});
+  }, [season]);
+
+  if (!season?.id) return null;
+
+  return (
+    <div className="sidebar-form">
+      <h4>Editar temporada</h4>
+      <label>Nombre</label>
+      <input value={draft.name || ""} onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
+      <div className="two compact">
+        <div>
+          <label>Inicio</label>
+          <input type="date" value={formatDate(draft.starts_on)} onChange={(event) => setDraft({ ...draft, starts_on: event.target.value })} />
+        </div>
+        <div>
+          <label>Fin</label>
+          <input type="date" value={formatDate(draft.ends_on)} onChange={(event) => setDraft({ ...draft, ends_on: event.target.value })} />
+        </div>
+      </div>
+      <label className="check-row">
+        <input type="checkbox" checked={Boolean(draft.is_active)} onChange={(event) => setDraft({ ...draft, is_active: event.target.checked })} />
+        Temporada activa
+      </label>
+      <div className="sidebar-form-actions">
+        <button onClick={() => onSave(draft)}>Actualizar</button>
+        <button className="danger" onClick={onDelete}>Eliminar</button>
+      </div>
+    </div>
+  );
+}
+
+function UserEditor({ user, onSave, onDelete }) {
+  const [draft, setDraft] = useState(user || {});
+
+  useEffect(() => {
+    setDraft(user || {});
+  }, [user]);
+
+  if (!user?.id) return null;
+
+  return (
+    <div className="sidebar-form">
+      <h4>Editar usuario</h4>
+      <label>Nombre</label>
+      <input value={draft.name || ""} onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
+      <label>Correo</label>
+      <input value={draft.email || ""} onChange={(event) => setDraft({ ...draft, email: event.target.value })} />
+      <label>Puesto</label>
+      <input value={draft.title || ""} onChange={(event) => setDraft({ ...draft, title: event.target.value })} />
+      <label>Departamento</label>
+      <input value={draft.department || ""} onChange={(event) => setDraft({ ...draft, department: event.target.value })} />
+      <div className="two compact">
+        <div>
+          <label>Telefono</label>
+          <input value={draft.phone || ""} onChange={(event) => setDraft({ ...draft, phone: event.target.value })} />
+        </div>
+        <div>
+          <label>Celular</label>
+          <input value={draft.mobile || ""} onChange={(event) => setDraft({ ...draft, mobile: event.target.value })} />
+        </div>
+      </div>
+      <label>Ubicacion</label>
+      <input value={draft.location || ""} onChange={(event) => setDraft({ ...draft, location: event.target.value })} />
+      <label className="check-row">
+        <input type="checkbox" checked={Boolean(draft.active)} onChange={(event) => setDraft({ ...draft, active: event.target.checked })} />
+        Usuario activo
+      </label>
+      <div className="sidebar-form-actions">
+        <button onClick={() => onSave(draft)}>Actualizar</button>
+        <button className="danger" onClick={onDelete}>Eliminar</button>
+      </div>
+    </div>
+  );
+}
+
+function formatDate(value) {
+  if (!value) return "";
+  return String(value).slice(0, 10);
 }
 
 function DiagnosticsPanel({ apiBase, diagnostics, selectedUser, onTest, onClear }) {

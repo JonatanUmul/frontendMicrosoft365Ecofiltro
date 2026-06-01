@@ -1,5 +1,5 @@
 (function () {
-  const SIGNATURE_API_BASE = window.SIGNATURE_API_BASE || "https://backendmicrosoft365ecofiltro.onrender.com";
+  const SIGNATURE_API_BASE = window.SIGNATURE_API_BASE || "https://backendfirmas365.ecofiltro.net";
 
   const demoUsers = {
     "ana.morales@empresa.com": {
@@ -99,8 +99,25 @@
     return buildSignature(demoUsers[normalizedEmail] || Object.assign({}, defaultUser, { email: normalizedEmail || defaultUser.email }));
   }
 
+  async function logEvent(eventType, email, detail) {
+    try {
+      await fetch(`${SIGNATURE_API_BASE}/api/addin/events`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event_type: eventType,
+          email: email || "",
+          detail: detail || {}
+        })
+      });
+    } catch (error) {
+      console.warn("No se pudo registrar evento del add-in.", error);
+    }
+  }
+
   window.SignatureService = {
     buildSignature,
-    getSignatureForEmail
+    getSignatureForEmail,
+    logEvent
   };
 })();

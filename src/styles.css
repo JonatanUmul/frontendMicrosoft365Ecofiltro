@@ -161,6 +161,36 @@ button { cursor: pointer; }
   display: none;
 }
 
+.import-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.import-actions button,
+.import-button {
+  min-height: 34px;
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 8px;
+  padding: 8px 9px;
+  color: #fff;
+  background: rgba(255,255,255,.08);
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: none;
+  letter-spacing: 0;
+  cursor: pointer;
+}
+
+.import-button input {
+  display: none;
+}
+
 .list {
   display: grid;
   gap: 8px;
@@ -207,6 +237,71 @@ button { cursor: pointer; }
   color: #fff;
   font-weight: 800;
   background: var(--accent);
+}
+
+.sidebar-form {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 8px;
+  padding: 11px;
+  background: rgba(255,255,255,.06);
+}
+
+.sidebar-form h4 {
+  margin: 0;
+  color: #fff;
+  font-size: 13px;
+}
+
+.sidebar-form label {
+  color: #cbd8e8;
+  font-size: 11px;
+}
+
+.sidebar-form input {
+  border-color: rgba(255,255,255,.18);
+  color: #fff;
+  background: rgba(255,255,255,.08);
+  padding: 8px 9px;
+}
+
+.sidebar-form input[type="date"] {
+  color-scheme: dark;
+}
+
+.sidebar-form-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.sidebar-form-actions button {
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 8px;
+  padding: 8px 9px;
+  color: #fff;
+  background: rgba(255,255,255,.09);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.sidebar-form-actions button.danger {
+  border-color: #ffb4a8;
+  background: #b42318;
+}
+
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.check-row input {
+  width: auto;
 }
 
 .logo-list {
@@ -327,6 +422,12 @@ button { cursor: pointer; }
   color: #fff;
   border-color: var(--brand);
   background: var(--brand);
+}
+
+.button.danger-outline {
+  color: #9f2018;
+  border-color: #f2c5bf;
+  background: #fff7f5;
 }
 
 .status {
@@ -569,6 +670,10 @@ textarea {
 
 .two {
   grid-template-columns: 1fr 1fr;
+}
+
+.two.compact {
+  gap: 7px;
 }
 
 .quad {
