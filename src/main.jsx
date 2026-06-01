@@ -1,6 +1,6 @@
 import React, { Component, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Copy, ImagePlus, Mail, Minus, Plus, Save, Square, Trash2, Type, Upload } from "lucide-react";
+import { AlertCircle, Copy, ImagePlus, Mail, Minus, Plus, Save, Square, Trash2, Type, Upload } from "lucide-react";
 import "./styles.css";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:5174";
@@ -74,6 +74,18 @@ function App() {
   const [selectedElementId, setSelectedElementId] = useState(null);
   const [previewHtml, setPreviewHtml] = useState("");
   const [status, setStatus] = useState("Cargando...");
+  const [diagnostics, setDiagnostics] = useState([]);
+
+  function addDiagnostic(type, message, detail = "") {
+    const entry = {
+      id: `${Date.now()}-${Math.random()}`,
+      time: new Date().toLocaleTimeString(),
+      type,
+      message,
+      detail: typeof detail === "string" ? detail : JSON.stringify(detail)
+    };
+    setDiagnostics((current) => [entry, ...current].slice(0, 30));
+  }
 
   function pickSignatureForSeason(seasonId, payload = data) {
     const season = payload.seasons.find((item) => item.id === seasonId);
@@ -82,8 +94,15 @@ function App() {
   }
 
   async function load(options = {}) {
+    addDiagnostic("info", "Cargando datos iniciales", `${API}/api/bootstrap`);
     const response = await fetch(`${API}/api/bootstrap`);
+    if (!response.ok) {
+      const text = await response.text();
+      addDiagnostic("error", "No se pudo cargar bootstrap", text);
+      throw new Error(`Bootstrap fallo (${response.status})`);
+    }
     const payload = await response.json();
+    addDiagnostic("ok", "Datos cargados", `${payload.users.length} usuarios, ${payload.seasons.length} temporadas`);
     setData(payload);
     const activeSeason = payload.seasons.find((season) => season.is_active) || payload.seasons[0];
     const seasonId = options.seasonId || selectedSeasonId || activeSeason?.id || null;
@@ -97,7 +116,10 @@ function App() {
   }
 
   useEffect(() => {
-    load().catch((error) => setStatus(`Error: ${error.message}`));
+    load().catch((error) => {
+      setStatus(`Error: ${error.message}`);
+      addDiagnostic("error", "Error inicial", error.message);
+    });
   }, []);
 
   const selectedUser = useMemo(
@@ -123,9 +145,16 @@ function App() {
       if (!selectedUser.email) return;
       try {
         const response = await fetch(`${API}/api/public/signature?email=${encodeURIComponent(selectedUser.email)}`);
+        if (!response.ok) {
+          const text = await response.text();
+          addDiagnostic("error", "No se pudo consultar firma publica", text);
+          setPreviewHtml("");
+          return;
+        }
         const payload = await response.json();
         setPreviewHtml(payload.html || "");
       } catch {
+        addDiagnostic("error", "Error consultando firma publica", `${API}/api/public/signature?email=${selectedUser.email}`);
         setPreviewHtml("");
       }
     }
@@ -212,7 +241,11 @@ function App() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
     });
-    if (!response.ok) throw new Error("No se pudo guardar");
+    if (!response.ok) {
+      const text = await response.text();
+      addDiagnostic("error", "No se pudo guardar firma", text);
+      throw new Error("No se pudo guardar");
+    }
     const saved = await response.json();
     if (saved.signature) {
       setSignatureDraft(structuredClone(saved.signature));
@@ -225,6 +258,7 @@ function App() {
         ]
       }));
     }
+    addDiagnostic("ok", "Firma guardada", `${saved.signature?.name || signatureDraft.name} (${saved.signature?.mode || signatureDraft.mode})`);
     setStatus("Firma guardada en MySQL");
   }
 
@@ -235,9 +269,13 @@ function App() {
     form.append("file", file);
     const response = await fetch(`${API}/api/assets`, { method: "POST", body: form });
     const payload = await response.json();
-    if (!response.ok) throw new Error(payload.error || "No se pudo subir imagen");
+    if (!response.ok) {
+      addDiagnostic("error", "No se pudo subir imagen", payload);
+      throw new Error(payload.error || "No se pudo subir imagen");
+    }
     await load();
     if (options.addToCanvas) addElementFromImage(payload.public_url);
+    addDiagnostic("ok", "Imagen guardada", payload.public_url);
     setStatus("Imagen guardada en MySQL");
   }
 
@@ -259,12 +297,14 @@ function App() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, is_active: false })
     });
+    addDiagnostic("ok", "Temporada creada", name);
     await load({ userId: selectedUserId });
   }
 
   async function activateSeason() {
     if (!selectedSeasonId) return;
     await fetch(`${API}/api/seasons/${selectedSeasonId}/activate`, { method: "POST" });
+    addDiagnostic("ok", "Temporada activada", String(selectedSeasonId));
     await load({ seasonId: selectedSeasonId, userId: selectedUserId });
     setStatus("Temporada activada");
   }
@@ -277,11 +317,35 @@ function App() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: email.split("@")[0], email, active: 1 })
     });
+    addDiagnostic("ok", "Usuario guardado", email);
     await load({ seasonId: selectedSeasonId });
   }
 
   if (!signatureDraft) {
-    return <div className="loading">{status}</div>;
+    return (
+      <div className="loading-screen">
+        <div className="loading-card">
+          <h1>Firmas 365</h1>
+          <p>{status}</p>
+          <DiagnosticsPanel
+            apiBase={API}
+            diagnostics={diagnostics}
+            selectedUser={{ email: "usuario@empresa.com" }}
+            onTest={async () => {
+              const url = `${API}/api/health`;
+              try {
+                const response = await fetch(url);
+                const text = await response.text();
+                addDiagnostic(response.ok ? "ok" : "error", "Prueba /api/health", text);
+              } catch (error) {
+                addDiagnostic("error", "Prueba /api/health fallo", error.message);
+              }
+            }}
+            onClear={() => setDiagnostics([])}
+          />
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -383,6 +447,23 @@ function App() {
         </header>
 
         <div className="status">{status}</div>
+
+        <DiagnosticsPanel
+          apiBase={API}
+          diagnostics={diagnostics}
+          selectedUser={selectedUser}
+          onTest={async () => {
+            const url = `${API}/api/health`;
+            try {
+              const response = await fetch(url);
+              const text = await response.text();
+              addDiagnostic(response.ok ? "ok" : "error", "Prueba /api/health", text);
+            } catch (error) {
+              addDiagnostic("error", "Prueba /api/health fallo", error.message);
+            }
+          }}
+          onClear={() => setDiagnostics([])}
+        />
 
         <div className="workspace">
           <section className="panel controls">
@@ -596,6 +677,49 @@ function NumberField({ label, value, onChange }) {
       <label>{label}</label>
       <input type="number" value={value} onChange={(event) => onChange(Number(event.target.value))} />
     </div>
+  );
+}
+
+function DiagnosticsPanel({ apiBase, diagnostics, selectedUser, onTest, onClear }) {
+  const [open, setOpen] = useState(false);
+  const signatureUrl = `${apiBase}/api/public/signature?email=${encodeURIComponent(selectedUser.email || "usuario@empresa.com")}`;
+
+  return (
+    <section className={open ? "diagnostics open" : "diagnostics"}>
+      <button className="diagnostics-toggle" onClick={() => setOpen(!open)}>
+        <AlertCircle size={17} />
+        Diagnostico
+        <span>{diagnostics.filter((item) => item.type === "error").length} errores</span>
+      </button>
+      {open && (
+        <div className="diagnostics-body">
+          <div className="diagnostics-grid">
+            <div>
+              <label>API conectada</label>
+              <code>{apiBase}</code>
+            </div>
+            <div>
+              <label>Firma publica</label>
+              <code>{signatureUrl}</code>
+            </div>
+          </div>
+          <div className="diagnostics-actions">
+            <button onClick={onTest}>Probar backend</button>
+            <button onClick={() => navigator.clipboard.writeText(signatureUrl)}>Copiar endpoint</button>
+            <button onClick={onClear}>Limpiar</button>
+          </div>
+          <div className="diagnostics-log">
+            {diagnostics.length === 0 && <p>No hay eventos todavia.</p>}
+            {diagnostics.map((item) => (
+              <article className={`diagnostic-entry ${item.type}`} key={item.id}>
+                <strong>{item.time} - {item.message}</strong>
+                {item.detail && <span>{item.detail}</span>}
+              </article>
+            ))}
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 
