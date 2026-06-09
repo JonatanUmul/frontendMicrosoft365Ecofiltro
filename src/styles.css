@@ -168,6 +168,28 @@ button { cursor: pointer; }
   margin-bottom: 10px;
 }
 
+.microsoft-sync-button {
+  width: 100%;
+  min-height: 38px;
+  margin-bottom: 8px;
+  border: 1px solid #78b9ff;
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: #fff;
+  background: #1666c1;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.microsoft-sync-button:disabled {
+  cursor: wait;
+  opacity: .7;
+}
+
 .import-actions button,
 .import-button {
   min-height: 34px;
@@ -656,6 +678,22 @@ textarea {
   min-height: 330px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 12px;
+}
+
+.token-help {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.8;
+}
+
+.token-help code {
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 2px 5px;
+  color: #174c84;
+  background: #edf6ff;
+  white-space: nowrap;
 }
 
 .segmented {

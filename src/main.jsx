@@ -1,6 +1,6 @@
 import React, { Component, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { AlertCircle, Copy, ImagePlus, Mail, Minus, Plus, Save, Square, Trash2, Type, Upload } from "lucide-react";
+import { AlertCircle, Copy, ImagePlus, Mail, Minus, Plus, RefreshCw, Save, Square, Trash2, Type, Upload } from "lucide-react";
 import "./styles.css";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:5174";
@@ -76,6 +76,7 @@ function App() {
   const [status, setStatus] = useState("Cargando...");
   const [diagnostics, setDiagnostics] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [syncingMicrosoft365, setSyncingMicrosoft365] = useState(false);
 
   function addDiagnostic(type, message, detail = "") {
     const entry = {
@@ -449,6 +450,29 @@ function App() {
     }
   }
 
+  async function syncUsersFromMicrosoft365() {
+    if (syncingMicrosoft365) return;
+    setSyncingMicrosoft365(true);
+    setStatus("Sincronizando usuarios desde Microsoft 365...");
+    try {
+      const response = await fetch(`${API}/api/microsoft365/sync-users`, { method: "POST" });
+      const payload = await response.json();
+      if (!response.ok) {
+        addDiagnostic("error", "No se pudo sincronizar Microsoft 365", payload.error || payload);
+        setStatus(payload.error || "No se pudo sincronizar Microsoft 365");
+        return;
+      }
+      addDiagnostic("ok", "Microsoft 365 sincronizado", `${payload.imported} usuarios actualizados, ${payload.skipped} omitidos`);
+      setStatus(`${payload.imported} usuarios sincronizados desde Microsoft 365`);
+      await load({ seasonId: selectedSeasonId, userId: selectedUserId });
+    } catch (error) {
+      addDiagnostic("error", "Error sincronizando Microsoft 365", error.message);
+      setStatus("Error sincronizando Microsoft 365");
+    } finally {
+      setSyncingMicrosoft365(false);
+    }
+  }
+
   function downloadUserTemplate() {
     const csv = [
       "name,email,title,department,phone,mobile,location,active",
@@ -558,6 +582,9 @@ function App() {
             <span>Usuarios</span>
             <button onClick={addUser} title="Agregar usuario"><Plus size={16} /></button>
           </div>
+          <button className="microsoft-sync-button" onClick={syncUsersFromMicrosoft365} disabled={syncingMicrosoft365}>
+            <RefreshCw size={14} /> {syncingMicrosoft365 ? "Sincronizando..." : "Sincronizar 365"}
+          </button>
           <div className="import-actions">
             <label className="import-button">
               <Upload size={14} /> Subir CSV
@@ -738,6 +765,9 @@ function App() {
                   placeholder="Pega aqui tu HTML. Puedes usar {{name}}, {{email}}, {{title}}, {{department}}, {{phone}}, {{mobile}}, {{location}}."
                   onChange={(event) => updateDraft({ html: event.target.value })}
                 />
+                <p className="token-help">
+                  Campos de Microsoft 365: <code>{"{{name}}"}</code> <code>{"{{email}}"}</code> <code>{"{{title}}"}</code> <code>{"{{department}}"}</code> <code>{"{{phone}}"}</code> <code>{"{{mobile}}"}</code> <code>{"{{location}}"}</code>
+                </p>
                 <label className="upload-button full">
                   <Upload size={16} /> Subir archivo HTML
                   <input
