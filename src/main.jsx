@@ -5,10 +5,11 @@ import "./styles.css";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:5174";
 const fonts = ["Arial", "Verdana", "Georgia", "Tahoma", "Trebuchet MS", "Courier New"];
-const fields = ["name", "title", "department", "email", "phone", "mobile", "location"];
+const fields = ["name", "title", "company", "department", "email", "phone", "mobile", "location"];
 const fieldLabels = {
   name: "Nombre",
   title: "Puesto",
+  company: "Empresa",
   department: "Departamento",
   email: "Correo",
   phone: "Telefono",
@@ -766,7 +767,7 @@ function App() {
                   onChange={(event) => updateDraft({ html: event.target.value })}
                 />
                 <p className="token-help">
-                  Campos de Microsoft 365: <code>{"{{name}}"}</code> <code>{"{{email}}"}</code> <code>{"{{title}}"}</code> <code>{"{{department}}"}</code> <code>{"{{phone}}"}</code> <code>{"{{mobile}}"}</code> <code>{"{{location}}"}</code>
+                  Campos de Microsoft 365: <code>{"{{name}}"}</code> <code>{"{{email}}"}</code> <code>{"{{title}}"}</code> <code>{"{{company}}"}</code> <code>{"{{department}}"}</code> <code>{"{{phone}}"}</code> <code>{"{{mobile}}"}</code> <code>{"{{location}}"}</code>
                 </p>
                 <label className="upload-button full">
                   <Upload size={16} /> Subir archivo HTML
@@ -1218,6 +1219,7 @@ function applyTokens(html = "", user = {}) {
     .replaceAll("{{name}}", user.name || "")
     .replaceAll("{{email}}", user.email || "")
     .replaceAll("{{title}}", user.title || "")
+    .replaceAll("{{company}}", user.company || "")
     .replaceAll("{{department}}", user.department || "")
     .replaceAll("{{phone}}", user.phone || "")
     .replaceAll("{{mobile}}", user.mobile || "")
