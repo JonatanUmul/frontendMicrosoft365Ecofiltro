@@ -763,11 +763,11 @@ function App() {
                 <textarea
                   className="html-editor"
                   value={signatureDraft.html || ""}
-                  placeholder="Pega aqui tu HTML. Puedes usar {{name}}, {{email}}, {{title}}, {{department}}, {{phone}}, {{mobile}}, {{location}}."
+                  placeholder="Pega aqui tu HTML. Puedes usar {{name}}, {{email}}, {{title}}, {{department}}, {{phone}}, {{mobile}}, {{location}}, {{photo}}."
                   onChange={(event) => updateDraft({ html: event.target.value })}
                 />
                 <p className="token-help">
-                  Campos de Microsoft 365: <code>{"{{name}}"}</code> <code>{"{{email}}"}</code> <code>{"{{title}}"}</code> <code>{"{{company}}"}</code> <code>{"{{department}}"}</code> <code>{"{{phone}}"}</code> <code>{"{{mobile}}"}</code> <code>{"{{location}}"}</code>
+                  Campos de Microsoft 365: <code>{"{{name}}"}</code> <code>{"{{email}}"}</code> <code>{"{{title}}"}</code> <code>{"{{company}}"}</code> <code>{"{{department}}"}</code> <code>{"{{phone}}"}</code> <code>{"{{mobile}}"}</code> <code>{"{{location}}"}</code> <code>{"{{photo}}"}</code>
                 </p>
                 <label className="upload-button full">
                   <Upload size={16} /> Subir archivo HTML
@@ -1223,7 +1223,8 @@ function applyTokens(html = "", user = {}) {
     .replaceAll("{{department}}", user.department || "")
     .replaceAll("{{phone}}", user.phone || "")
     .replaceAll("{{mobile}}", user.mobile || "")
-    .replaceAll("{{location}}", user.location || "");
+    .replaceAll("{{location}}", user.location || "")
+    .replaceAll("{{photo}}", `${API}/api/microsoft365/user-photo?email=${encodeURIComponent(user.email || "")}`);
 }
 
 function renderLocal(signature, user) {
