@@ -451,6 +451,50 @@ function App() {
     }
   }
 
+  async function updateMicrosoft365FromCsv(file) {
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const users = parseUsersCsv(text);
+      if (!users.length) {
+        addDiagnostic("error", "CSV sin usuarios", "Revisa que tenga encabezados y correos.");
+        setStatus("No se encontraron usuarios en el CSV");
+        return;
+      }
+      if (!confirm(`Se actualizaran ${users.length} usuarios directamente en Microsoft 365. Las celdas vacias limpiaran esos campos. ¿Continuar?`)) {
+        setStatus("Actualizacion de Microsoft 365 cancelada");
+        return;
+      }
+
+      setStatus("Actualizando usuarios directamente en Microsoft 365...");
+      const response = await fetch(`${API}/api/microsoft365/update-users`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ users })
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        addDiagnostic("error", "No se pudo actualizar Microsoft 365", payload);
+        setStatus(payload.error || "No se pudo actualizar Microsoft 365");
+        return;
+      }
+
+      const errorSummary = payload.errors?.length
+        ? payload.errors.slice(0, 5).map((item) => `${item.email}: ${item.error}`).join(" | ")
+        : "";
+      addDiagnostic(
+        payload.skipped ? "error" : "ok",
+        "CSV aplicado en Microsoft 365",
+        `${payload.updated} actualizados, ${payload.skipped} omitidos${errorSummary ? ` | ${errorSummary}` : ""}`
+      );
+      setStatus(`${payload.updated} usuarios actualizados directamente en Microsoft 365`);
+      await syncUsersFromMicrosoft365();
+    } catch (error) {
+      addDiagnostic("error", "Error actualizando Microsoft 365 con CSV", error.message);
+      setStatus("Error actualizando Microsoft 365 con CSV");
+    }
+  }
+
   async function syncUsersFromMicrosoft365() {
     if (syncingMicrosoft365) return;
     setSyncingMicrosoft365(true);
@@ -476,8 +520,8 @@ function App() {
 
   function downloadUserTemplate() {
     const csv = [
-      "name,email,title,department,phone,mobile,location,active",
-      "Ana Morales,ana.morales@empresa.com,Gerente Comercial,Ventas,+502 2300 1001,+502 5555 0001,Guatemala,1"
+      "name,email,title,company,department,phone,mobile,location,active",
+      "Ana Morales,ana.morales@empresa.com,Gerente Comercial,Empresa,Ventas,+502 2300 1001,+502 5555 0001,Guatemala,1"
     ].join("\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
     const link = document.createElement("a");
@@ -600,6 +644,17 @@ function App() {
             </label>
             <button onClick={downloadUserTemplate}>Plantilla</button>
           </div>
+          <label className="microsoft-update-button">
+            <Upload size={14} /> Actualizar 365 con CSV
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              onChange={(event) => {
+                updateMicrosoft365FromCsv(event.target.files[0]);
+                event.target.value = "";
+              }}
+            />
+          </label>
           <div className="list users">
             {data.users.map((user) => (
               <button
@@ -902,6 +957,9 @@ function normalizeHeader(header) {
     title: "title",
     departamento: "department",
     department: "department",
+    empresa: "company",
+    compania: "company",
+    company: "company",
     telefono: "phone",
     phone: "phone",
     celular: "mobile",

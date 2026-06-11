@@ -190,6 +190,28 @@ button { cursor: pointer; }
   opacity: .7;
 }
 
+.microsoft-update-button {
+  width: 100%;
+  min-height: 38px;
+  margin-bottom: 10px;
+  border: 1px solid #5ad1bd;
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: #fff;
+  background: #248c7d;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.microsoft-update-button input {
+  display: none;
+}
+
 .import-actions button,
 .import-button {
   min-height: 34px;
