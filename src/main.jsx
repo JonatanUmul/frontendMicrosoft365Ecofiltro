@@ -466,28 +466,34 @@ function App() {
         return;
       }
 
-      setStatus("Actualizando usuarios directamente en Microsoft 365...");
-      const response = await fetch(`${API}/api/microsoft365/update-users`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ users })
-      });
-      const payload = await response.json();
-      if (!response.ok) {
-        addDiagnostic("error", "No se pudo actualizar Microsoft 365", payload);
-        setStatus(payload.error || "No se pudo actualizar Microsoft 365");
-        return;
+      const batchSize = 20;
+      const totals = { updated: 0, skipped: 0, errors: [] };
+      for (let start = 0; start < users.length; start += batchSize) {
+        const batch = users.slice(start, start + batchSize);
+        setStatus(`Actualizando Microsoft 365: ${Math.min(start + batch.length, users.length)} de ${users.length}...`);
+        const response = await fetch(`${API}/api/microsoft365/update-users`, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+          body: new URLSearchParams({ payload: JSON.stringify({ users: batch }) })
+        });
+        const payload = await response.json();
+        totals.updated += Number(payload.updated || 0);
+        totals.skipped += Number(payload.skipped || 0);
+        totals.errors.push(...(payload.errors || []));
+        if (!response.ok && !payload.errors?.length) {
+          throw new Error(payload.error || `El lote iniciado en la fila ${start + 1} fallo.`);
+        }
       }
 
-      const errorSummary = payload.errors?.length
-        ? payload.errors.slice(0, 5).map((item) => `${item.email}: ${item.error}`).join(" | ")
+      const errorSummary = totals.errors.length
+        ? totals.errors.slice(0, 5).map((item) => `${item.email}: ${item.error}`).join(" | ")
         : "";
       addDiagnostic(
-        payload.skipped ? "error" : "ok",
+        totals.skipped ? "error" : "ok",
         "CSV aplicado en Microsoft 365",
-        `${payload.updated} actualizados, ${payload.skipped} omitidos${errorSummary ? ` | ${errorSummary}` : ""}`
+        `${totals.updated} actualizados, ${totals.skipped} omitidos${errorSummary ? ` | ${errorSummary}` : ""}`
       );
-      setStatus(`${payload.updated} usuarios actualizados directamente en Microsoft 365`);
+      setStatus(`${totals.updated} usuarios actualizados directamente en Microsoft 365`);
       await syncUsersFromMicrosoft365();
     } catch (error) {
       addDiagnostic("error", "Error actualizando Microsoft 365 con CSV", error.message);
