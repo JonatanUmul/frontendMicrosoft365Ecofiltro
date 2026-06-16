@@ -465,7 +465,7 @@ function App() {
         setStatus("No se encontraron usuarios en el CSV");
         return;
       }
-      if (!confirm(`Se actualizaran ${users.length} usuarios directamente en Microsoft 365. Las celdas vacias limpiaran esos campos. ¿Continuar?`)) {
+      if (!confirm(`Se actualizaran ${users.length} usuarios directamente en Microsoft 365. Solo se sobrescribiran los campos con datos; las celdas vacias se ignoraran. El correo no se modifica. ¿Continuar?`)) {
         setStatus("Actualizacion de Microsoft 365 cancelada");
         return;
       }
