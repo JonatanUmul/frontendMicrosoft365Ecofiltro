@@ -15,13 +15,14 @@
   <SupportUrl DefaultValue="https://frontendmicrosoft365ecofiltro.onrender.com"/>
   <AppDomains>
     <AppDomain>https://frontendmicrosoft365ecofiltro.onrender.com</AppDomain>
+    <AppDomain>https://backendfirmas365.ecofiltro.net</AppDomain>
   </AppDomains>
   <Hosts>
     <Host Name="Mailbox"/>
   </Hosts>
   <Requirements>
     <Sets>
-      <Set Name="Mailbox" MinVersion="1.10"/>
+      <Set Name="Mailbox" MinVersion="1.5"/>
     </Sets>
   </Requirements>
   <FormSettings>
@@ -42,7 +43,7 @@
     <VersionOverrides xmlns="http://schemas.microsoft.com/office/mailappversionoverrides/1.1"
                       xsi:type="VersionOverridesV1_1">
       <Requirements>
-        <bt:Sets DefaultMinVersion="1.10">
+        <bt:Sets DefaultMinVersion="1.5">
           <bt:Set Name="Mailbox"/>
         </bt:Sets>
       </Requirements>
@@ -84,6 +85,15 @@
               <SourceLocation resid="Autorun.Url"/>
             </ExtensionPoint>
           </DesktopFormFactor>
+          <MobileFormFactor>
+            <FunctionFile resid="Taskpane.Url"/>
+            <ExtensionPoint xsi:type="LaunchEvent">
+              <LaunchEvents>
+                <LaunchEvent Type="OnNewMessageCompose" FunctionName="onNewMessageComposeHandler"/>
+              </LaunchEvents>
+              <SourceLocation resid="Autorun.Url"/>
+            </ExtensionPoint>
+          </MobileFormFactor>
         </Host>
       </Hosts>
       <Resources>

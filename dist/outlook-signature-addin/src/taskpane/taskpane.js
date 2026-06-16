@@ -17,7 +17,7 @@ async function insertSignature() {
   button.disabled = true;
   status.textContent = "Insertando firma...";
   await window.SignatureService.logEvent("manual_insert_clicked", email);
-  const html = await window.SignatureService.getSignatureForEmail(email);
+  const html = await window.SignatureService.getSignatureForEmail(email, { preferCache: false, timeoutMs: 8000 });
 
   window.SignatureService.setManagedSignature(item, html, function (result) {
     window.SignatureService.logEvent("manual_insert_result", email, {

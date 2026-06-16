@@ -1,35 +1,77 @@
 (function () {
   const SIGNATURE_API_BASE = window.SIGNATURE_API_BASE || "https://backendfirmas365.ecofiltro.net";
+  const CACHE_TTL_MS = 2 * 60 * 1000;
+  const STALE_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
-  function escapeHtml(value) {
-    return String(value || "")
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;");
-  }
-
-  async function getSignatureForEmail(email) {
+  async function getSignatureForEmail(email, options) {
     const normalizedEmail = String(email || "").toLowerCase();
+    const cached = getCachedSignature(normalizedEmail);
+    const freshEnough = cached && Date.now() - cached.savedAt < CACHE_TTL_MS;
+    if (freshEnough && options?.preferCache !== false) return cached.html;
 
-    try {
-      const response = await fetch(`${SIGNATURE_API_BASE}/api/public/signature?email=${encodeURIComponent(normalizedEmail)}&t=${Date.now()}`, {
-        headers: { Accept: "application/json" },
-        cache: "no-store"
-      });
-
-      if (response.ok) {
-        const payload = await response.json();
-        if (payload && payload.html) return payload.html;
+    const timeoutMs = Number(options?.timeoutMs || 4500);
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      try {
+        const html = await fetchSignature(normalizedEmail, timeoutMs);
+        if (html) {
+          setCachedSignature(normalizedEmail, html);
+          return html;
+        }
+      } catch (error) {
+        console.warn("No se pudo consultar la API de firmas.", error);
+        await logEvent("signature_fetch_error", normalizedEmail, { attempt, message: error.message });
       }
+    }
 
-      await logEvent("signature_fetch_empty", normalizedEmail, { status: response.status });
-    } catch (error) {
-      console.warn("No se pudo consultar la API de firmas.", error);
-      await logEvent("signature_fetch_error", normalizedEmail, { message: error.message });
+    if (cached && Date.now() - cached.savedAt < STALE_CACHE_TTL_MS) {
+      await logEvent("signature_cache_used", normalizedEmail, { age_ms: Date.now() - cached.savedAt });
+      return cached.html;
     }
 
     return "";
+  }
+
+  async function fetchSignature(email, timeoutMs) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(`${SIGNATURE_API_BASE}/api/public/signature?email=${encodeURIComponent(email)}&t=${Date.now()}`, {
+        headers: { Accept: "application/json" },
+        cache: "no-store",
+        signal: controller.signal
+      });
+      if (!response.ok) {
+        await logEvent("signature_fetch_empty", email, { status: response.status });
+        return "";
+      }
+      const payload = await response.json();
+      return payload?.html || "";
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  function cacheKey(email) {
+    return `firmas365:signature:${email || "unknown"}`;
+  }
+
+  function getCachedSignature(email) {
+    try {
+      const raw = localStorage.getItem(cacheKey(email));
+      if (!raw) return null;
+      const cached = JSON.parse(raw);
+      return cached?.html ? cached : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function setCachedSignature(email, html) {
+    try {
+      localStorage.setItem(cacheKey(email), JSON.stringify({ html, savedAt: Date.now() }));
+    } catch {
+      // Office clients can disable localStorage in some restricted contexts.
+    }
   }
 
   function stripManagedSignature(html) {
@@ -79,11 +121,13 @@
     try {
       await fetch(`${SIGNATURE_API_BASE}/api/addin/events`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          event_type: eventType,
-          email: email || "",
-          detail: detail || {}
+        headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+        body: new URLSearchParams({
+          payload: JSON.stringify({
+            event_type: eventType,
+            email: email || "",
+            detail: detail || {}
+          })
         })
       });
     } catch (error) {

@@ -32,7 +32,7 @@ async function onNewMessageComposeHandler(event) {
     await window.SignatureService.logEvent("new_message_compose", email, {
       itemType: Office.context.mailbox.item?.itemType || "unknown"
     });
-    const html = await window.SignatureService.getSignatureForEmail(email);
+    const html = await window.SignatureService.getSignatureForEmail(email, { timeoutMs: 3500 });
     setSignature(html, event);
   } catch (error) {
     console.error("No se pudo insertar la firma automatica.", error);

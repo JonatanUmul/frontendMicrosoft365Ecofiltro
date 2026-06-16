@@ -5,10 +5,12 @@ import "./styles.css";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:5174";
 const fonts = ["Arial", "Verdana", "Georgia", "Tahoma", "Trebuchet MS", "Courier New"];
-const fields = ["name", "title", "company", "department", "email", "phone", "mobile", "location"];
+const fields = ["name", "title", "givenName", "surname", "company", "department", "email", "phone", "mobile", "location"];
 const fieldLabels = {
   name: "Nombre",
   title: "Puesto",
+  givenName: "givenName",
+  surname: "surname",
   company: "Empresa",
   department: "Departamento",
   email: "Correo",
@@ -31,6 +33,8 @@ function emptySignature(seasonId, seasonName = "Nueva temporada", logoUrl = "") 
       elements: [
         logoUrl ? createElement("logo", { src: logoUrl, x: 24, y: 24, w: 92, h: 92 }) : createElement("box", { x: 24, y: 24, w: 92, h: 92, backgroundColor: "#e7f0fb", radius: 8 }),
         createElement("field", { field: "name", x: 140, y: 28, w: 360, h: 30, fontSize: 22, color: "#1666c1", fontWeight: "700" }),
+        createElement("field", { field: "givenName", x: 140, y: 28, w: 360, h: 30, fontSize: 22, color: "#1666c1", fontWeight: "700" }),
+        createElement("field", { field: "surname", x: 140, y: 28, w: 360, h: 30, fontSize: 22, color: "#1666c1", fontWeight: "700" }),
         createElement("field", { field: "title", x: 140, y: 60, w: 360, h: 24, fontSize: 14, color: "#334155" }),
         createElement("field", { field: "email", x: 140, y: 90, w: 360, h: 22, fontSize: 13, color: "#334155" }),
         createElement("field", { field: "phone", x: 140, y: 114, w: 220, h: 22, fontSize: 13, color: "#334155" }),
@@ -526,8 +530,8 @@ function App() {
 
   function downloadUserTemplate() {
     const csv = [
-      "name,email,title,company,department,phone,mobile,location,active",
-      "Ana Morales,ana.morales@empresa.com,Gerente Comercial,Empresa,Ventas,+502 2300 1001,+502 5555 0001,Guatemala,1"
+      "name,givenName,surname,email,title,company,department,phone,mobile,location,active",
+      "Ana Morales,Ana,Morales,ana.morales@empresa.com,Gerente Comercial,Empresa,Ventas,+502 2300 1001,+502 5555 0001,Guatemala,1"
     ].join("\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
     const link = document.createElement("a");
@@ -824,11 +828,11 @@ function App() {
                 <textarea
                   className="html-editor"
                   value={signatureDraft.html || ""}
-                  placeholder="Pega aqui tu HTML. Puedes usar {{name}}, {{email}}, {{title}}, {{department}}, {{phone}}, {{mobile}}, {{location}}, {{photo}}."
+                  placeholder="Pega aqui tu HTML. Puedes usar {{name}}, {{givenName}}, {{surname}}, {{email}}, {{title}}, {{department}}, {{phone}}, {{mobile}}, {{location}}, {{photo}}."
                   onChange={(event) => updateDraft({ html: event.target.value })}
                 />
                 <p className="token-help">
-                  Campos de Microsoft 365: <code>{"{{name}}"}</code> <code>{"{{email}}"}</code> <code>{"{{title}}"}</code> <code>{"{{company}}"}</code> <code>{"{{department}}"}</code> <code>{"{{phone}}"}</code> <code>{"{{mobile}}"}</code> <code>{"{{location}}"}</code> <code>{"{{photo}}"}</code>
+                  Campos de Microsoft 365: <code>{"{{name}}"}</code> <code>{"{{givenName}}"}</code> <code>{"{{surname}}"}</code> <code>{"{{email}}"}</code> <code>{"{{title}}"}</code> <code>{"{{company}}"}</code> <code>{"{{department}}"}</code> <code>{"{{phone}}"}</code> <code>{"{{mobile}}"}</code> <code>{"{{location}}"}</code> <code>{"{{photo}}"}</code>
                 </p>
                 <label className="upload-button full">
                   <Upload size={16} /> Subir archivo HTML
@@ -884,6 +888,7 @@ function App() {
 
 function parseUsersCsv(text) {
   const rows = parseCsvRows(text).filter((row) => row.some((cell) => String(cell || "").trim()));
+
   if (rows.length < 2) return [];
   const headers = rows[0].map(normalizeHeader);
   return rows.slice(1).map((row) => {
@@ -954,6 +959,18 @@ function normalizeHeader(header) {
   const aliases = {
     nombre: "name",
     name: "name",
+    displayname: "name",
+    display_name: "name",
+    givenname: "givenName",
+    givename: "givenName",
+    given_name: "givenName",
+    firstname: "givenName",
+    first_name: "givenName",
+    surname: "surname",
+    lastname: "surname",
+    last_name: "surname",
+    apellido: "surname",
+    apellidos: "surname",
     correo: "email",
     email: "email",
     mail: "email",
@@ -1281,6 +1298,8 @@ function elementStyle(element) {
 function applyTokens(html = "", user = {}) {
   return String(html || "")
     .replaceAll("{{name}}", user.name || "")
+    .replaceAll("{{givenName}}", user.givenName || "")
+    .replaceAll("{{surname}}", user.surname || "")
     .replaceAll("{{email}}", user.email || "")
     .replaceAll("{{title}}", user.title || "")
     .replaceAll("{{company}}", user.company || "")
