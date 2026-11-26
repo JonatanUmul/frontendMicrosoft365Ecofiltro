@@ -17,7 +17,12 @@ async function insertSignature() {
   button.disabled = true;
   status.textContent = "Insertando firma...";
   await window.SignatureService.logEvent("manual_insert_clicked", email);
-  const html = await window.SignatureService.getSignatureForEmail(email, { preferCache: false, timeoutMs: 8000 });
+  const html = await window.SignatureService.getSignatureForEmail(email, { preferCache: false, allowStale: false, timeoutMs: 8000 });
+  if (!html) {
+    status.textContent = "No se pudo conectar con el servidor de firmas. Intenta de nuevo.";
+    button.disabled = false;
+    return;
+  }
 
   window.SignatureService.setManagedSignature(item, html, function (result) {
     window.SignatureService.logEvent("manual_insert_result", email, {

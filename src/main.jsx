@@ -4,6 +4,19 @@ import { AlertCircle, Copy, ImagePlus, Mail, Minus, Plus, RefreshCw, Save, Squar
 import "./styles.css";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:5174";
+
+// El proxy del backend a veces responde con un redirect sin CORS y el navegador lo reporta
+// como error de red; esa peticion nunca llega a Express, asi que se puede reintentar.
+async function apiFetch(url, options, attempts = 4) {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await fetch(url, options);
+    } catch (error) {
+      if (attempt >= attempts) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 150 * attempt));
+    }
+  }
+}
 const fonts = ["Arial", "Verdana", "Georgia", "Tahoma", "Trebuchet MS", "Courier New"];
 const fields = ["name", "title", "givenName", "surname", "company", "department", "email", "phone", "mobile", "location"];
 const fieldLabels = {
@@ -103,7 +116,7 @@ function App() {
 
   async function load(options = {}) {
     addDiagnostic("info", "Cargando datos iniciales", `${API}/api/bootstrap`);
-    const response = await fetch(`${API}/api/bootstrap`);
+    const response = await apiFetch(`${API}/api/bootstrap`);
     if (!response.ok) {
       const text = await response.text();
       addDiagnostic("error", "No se pudo cargar bootstrap", text);
@@ -176,7 +189,7 @@ function App() {
     async function refreshPreview() {
       if (!selectedUser.email) return;
       try {
-        const response = await fetch(`${API}/api/public/signature?email=${encodeURIComponent(selectedUser.email)}`);
+        const response = await apiFetch(`${API}/api/public/signature?email=${encodeURIComponent(selectedUser.email)}`);
         if (!response.ok) {
           const text = await response.text();
           addDiagnostic("error", "No se pudo consultar firma publica", text);
@@ -273,7 +286,7 @@ function App() {
         is_default: true,
         html: signatureDraft.mode === "html" ? String(signatureDraft.html || "") : signatureDraft.html
       };
-      const response = await fetch(url, {
+      const response = await apiFetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
@@ -327,7 +340,7 @@ function App() {
     }
 
     if (!confirm(`Eliminar la firma "${signatureDraft.name}"?`)) return;
-    const response = await fetch(`${API}/api/signatures/${signatureDraft.id}`, { method: "DELETE" });
+    const response = await apiFetch(`${API}/api/signatures/${signatureDraft.id}`, { method: "DELETE" });
     if (!response.ok) {
       addDiagnostic("error", "No se pudo eliminar firma", await response.text());
       return;
@@ -341,7 +354,7 @@ function App() {
     setStatus("Subiendo imagen...");
     const form = new FormData();
     form.append("file", file);
-    const response = await fetch(`${API}/api/assets`, { method: "POST", body: form });
+    const response = await apiFetch(`${API}/api/assets`, { method: "POST", body: form });
     const payload = await response.json();
     if (!response.ok) {
       addDiagnostic("error", "No se pudo subir imagen", payload);
@@ -366,7 +379,7 @@ function App() {
   async function addSeason() {
     const name = prompt("Nombre de la temporada");
     if (!name) return;
-    const response = await fetch(`${API}/api/seasons`, {
+    const response = await apiFetch(`${API}/api/seasons`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, is_active: true })
@@ -379,7 +392,7 @@ function App() {
   async function saveSeason(patch) {
     if (!selectedSeasonId) return;
     const payload = { ...selectedSeason, ...patch };
-    const response = await fetch(`${API}/api/seasons/${selectedSeasonId}`, {
+    const response = await apiFetch(`${API}/api/seasons/${selectedSeasonId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
@@ -395,7 +408,7 @@ function App() {
   async function deleteSeason() {
     if (!selectedSeasonId) return;
     if (!confirm(`Eliminar la temporada "${selectedSeason.name}" y sus firmas?`)) return;
-    const response = await fetch(`${API}/api/seasons/${selectedSeasonId}`, { method: "DELETE" });
+    const response = await apiFetch(`${API}/api/seasons/${selectedSeasonId}`, { method: "DELETE" });
     if (!response.ok) {
       addDiagnostic("error", "No se pudo eliminar temporada", await response.text());
       return;
@@ -406,7 +419,12 @@ function App() {
 
   async function activateSeason() {
     if (!selectedSeasonId) return;
-    await fetch(`${API}/api/seasons/${selectedSeasonId}/activate`, { method: "POST" });
+    const response = await apiFetch(`${API}/api/seasons/${selectedSeasonId}/activate`, { method: "POST" });
+    if (!response.ok) {
+      addDiagnostic("error", "No se pudo activar temporada", await response.text());
+      setStatus("No se pudo activar la temporada");
+      return;
+    }
     addDiagnostic("ok", "Temporada activada", String(selectedSeasonId));
     await load({ seasonId: selectedSeasonId, userId: selectedUserId });
     setStatus("Temporada activada");
@@ -415,7 +433,7 @@ function App() {
   async function addUser() {
     const email = prompt("Correo del usuario");
     if (!email) return;
-    await fetch(`${API}/api/users`, {
+    await apiFetch(`${API}/api/users`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: email.split("@")[0], email, active: 1 })
@@ -435,7 +453,7 @@ function App() {
         setStatus("No se encontraron usuarios en el CSV");
         return;
       }
-      const response = await fetch(`${API}/api/users/import`, {
+      const response = await apiFetch(`${API}/api/users/import`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ users })
@@ -475,7 +493,7 @@ function App() {
       for (let start = 0; start < users.length; start += batchSize) {
         const batch = users.slice(start, start + batchSize);
         setStatus(`Actualizando Microsoft 365: ${Math.min(start + batch.length, users.length)} de ${users.length}...`);
-        const response = await fetch(`${API}/api/microsoft365/update-users`, {
+        const response = await apiFetch(`${API}/api/microsoft365/update-users`, {
           method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
           body: new URLSearchParams({ payload: JSON.stringify({ users: batch }) })
@@ -510,7 +528,7 @@ function App() {
     setSyncingMicrosoft365(true);
     setStatus("Sincronizando usuarios desde Microsoft 365...");
     try {
-      const response = await fetch(`${API}/api/microsoft365/sync-users`, { method: "POST" });
+      const response = await apiFetch(`${API}/api/microsoft365/sync-users`, { method: "POST" });
       const payload = await response.json();
       if (!response.ok) {
         addDiagnostic("error", "No se pudo sincronizar Microsoft 365", payload.error || payload);
@@ -544,7 +562,7 @@ function App() {
   async function saveUser(patch) {
     if (!selectedUserId) return;
     const payload = { ...selectedUser, ...patch };
-    const response = await fetch(`${API}/api/users/${selectedUserId}`, {
+    const response = await apiFetch(`${API}/api/users/${selectedUserId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
@@ -560,7 +578,7 @@ function App() {
   async function deleteUser() {
     if (!selectedUserId) return;
     if (!confirm(`Eliminar el usuario "${selectedUser.email}"?`)) return;
-    const response = await fetch(`${API}/api/users/${selectedUserId}`, { method: "DELETE" });
+    const response = await apiFetch(`${API}/api/users/${selectedUserId}`, { method: "DELETE" });
     if (!response.ok) {
       addDiagnostic("error", "No se pudo eliminar usuario", await response.text());
       return;

@@ -2,6 +2,11 @@
   const SIGNATURE_API_BASE = window.SIGNATURE_API_BASE || "https://backendfirmas365.ecofiltro.net";
   const CACHE_TTL_MS = 2 * 60 * 1000;
   const STALE_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+  const MAX_FETCH_ATTEMPTS = 5;
+
+  function wait(milliseconds) {
+    return new Promise((resolve) => setTimeout(resolve, milliseconds));
+  }
 
   async function getSignatureForEmail(email, options) {
     const normalizedEmail = String(email || "").toLowerCase();
@@ -10,20 +15,27 @@
     if (freshEnough && options?.preferCache !== false) return cached.html;
 
     const timeoutMs = Number(options?.timeoutMs || 4500);
-    for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const errors = [];
+    // El proxy del backend a veces responde con un redirect sin CORS ("Failed to fetch");
+    // se reintenta sin registrar eventos entre intentos para no desfasar las peticiones.
+    for (let attempt = 1; attempt <= MAX_FETCH_ATTEMPTS; attempt += 1) {
       try {
         const html = await fetchSignature(normalizedEmail, timeoutMs);
         if (html) {
           setCachedSignature(normalizedEmail, html);
+          if (errors.length) logEvent("signature_fetch_recovered", normalizedEmail, { attempts: attempt, errors });
           return html;
         }
+        break;
       } catch (error) {
         console.warn("No se pudo consultar la API de firmas.", error);
-        await logEvent("signature_fetch_error", normalizedEmail, { attempt, message: error.message });
+        errors.push(error.message);
+        if (attempt < MAX_FETCH_ATTEMPTS) await wait(150 * attempt);
       }
     }
+    if (errors.length) await logEvent("signature_fetch_error", normalizedEmail, { attempts: errors.length, errors });
 
-    if (cached && Date.now() - cached.savedAt < STALE_CACHE_TTL_MS) {
+    if (options?.allowStale !== false && cached && Date.now() - cached.savedAt < STALE_CACHE_TTL_MS) {
       await logEvent("signature_cache_used", normalizedEmail, { age_ms: Date.now() - cached.savedAt });
       return cached.html;
     }
